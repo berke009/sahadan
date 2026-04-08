@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateText, jsonSchema } from 'ai';
-import { gateway } from '@ai-sdk/gateway';
+
+const AI_GATEWAY_KEY = process.env.AI_GATEWAY_API_KEY || '';
+// Vercel AI Gateway base URL
+const GATEWAY_URL = 'https://gateway.ai.vercel.app/openai/v1/chat/completions';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -11,62 +13,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { messages, tools: rawTools } = req.body;
+    const { messages, tools } = req.body;
 
-    const systemMsg = messages.find((m: any) => m.role === 'system')?.content ?? '';
-    const chatMessages = messages.filter((m: any) => m.role !== 'system');
+    // Forward raw OpenAI-format request — no schema conversion
+    const response = await fetch(GATEWAY_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${AI_GATEWAY_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        max_tokens: 1024,
+        messages,
+        tools,
+        tool_choice: 'auto',
+      }),
+    });
 
-    // Use jsonSchema() helper — passes raw JSON Schema directly, no zod conversion
-    const sdkTools: Record<string, any> = {};
-    if (rawTools) {
-      for (const t of rawTools) {
-        const fn = t.function;
-        // Ensure parameters always has type:object
-        const parameters = {
-          type: 'object' as const,
-          properties: fn.parameters?.properties ?? {},
-          required: fn.parameters?.required ?? [],
-        };
-        sdkTools[fn.name] = {
-          description: fn.description,
-          parameters: jsonSchema(parameters as any),
-        };
-      }
+    const text = await response.text();
+
+    if (!response.ok) {
+      console.error('[api/chat] Gateway error:', response.status, text);
+      return res.status(response.status).json({ error: `AI Gateway error ${response.status}: ${text}` });
     }
 
-    const result = await generateText({
-      model: gateway('openai/gpt-4o-mini'),
-      system: systemMsg,
-      messages: chatMessages,
-      tools: Object.keys(sdkTools).length ? sdkTools : undefined,
-      toolChoice: 'auto',
-      maxTokens: 1024,
-    } as any);
-
-    const toolCall = result.toolCalls?.[0];
-    return res.status(200).json({
-      choices: [
-        {
-          message: {
-            role: 'assistant',
-            content: result.text || null,
-            tool_calls: toolCall
-              ? [
-                  {
-                    id: toolCall.toolCallId,
-                    type: 'function',
-                    function: {
-                      name: toolCall.toolName,
-                      arguments: JSON.stringify((toolCall as any).args ?? (toolCall as any).input ?? {}),
-                    },
-                  },
-                ]
-              : undefined,
-          },
-          finish_reason: toolCall ? 'tool_calls' : 'stop',
-        },
-      ],
-    });
+    return res.status(200).send(text);
   } catch (err: any) {
     console.error('[api/chat] Error:', err);
     return res.status(500).json({ error: err.message || 'Internal server error' });
