@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { generateText } from 'ai';
 import { gateway } from '@ai-sdk/gateway';
+import { z } from 'zod';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -11,31 +12,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { messages, tools } = req.body;
+    const { messages, tools: rawTools } = req.body;
 
-    // Extract system message and user/assistant messages
     const systemMsg = messages.find((m: any) => m.role === 'system')?.content ?? '';
     const chatMessages = messages.filter((m: any) => m.role !== 'system');
 
-    const result = await generateText({
+    // Convert raw JSON schema tools to AI SDK zod tools
+    const sdkTools: Record<string, any> = {};
+    if (rawTools) {
+      for (const t of rawTools) {
+        const fn = t.function;
+        // Build a zod object from JSON schema properties
+        const props = fn.parameters?.properties ?? {};
+        const required: string[] = fn.parameters?.required ?? [];
+        const shape: Record<string, z.ZodTypeAny> = {};
+        for (const [key, val] of Object.entries(props as Record<string, any>)) {
+          let field: z.ZodTypeAny =
+            val.type === 'number' ? z.number() : z.string();
+          if (!required.includes(key)) field = field.optional();
+          shape[key] = field;
+        }
+        sdkTools[fn.name] = {
+          description: fn.description,
+          parameters: z.object(shape),
+        };
+      }
+    }
+
+    const result = await (generateText as any)({
       model: gateway('openai/gpt-4o-mini'),
       system: systemMsg,
       messages: chatMessages,
-      tools: tools
-        ? Object.fromEntries(
-            tools.map((t: any) => [
-              t.function.name,
-              {
-                description: t.function.description,
-                parameters: t.function.parameters,
-              },
-            ])
-          )
-        : undefined,
+      tools: Object.keys(sdkTools).length ? sdkTools : undefined,
+      toolChoice: 'auto',
       maxTokens: 1024,
     });
 
-    // Return OpenAI-compatible response shape the frontend expects
+    // Return OpenAI-compatible shape so frontend works unchanged
     const toolCall = result.toolCalls?.[0];
     return res.status(200).json({
       choices: [
@@ -50,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     type: 'function',
                     function: {
                       name: toolCall.toolName,
-                      arguments: JSON.stringify(toolCall.args),
+                      arguments: JSON.stringify(toolCall.args ?? toolCall.input ?? {}),
                     },
                   },
                 ]
