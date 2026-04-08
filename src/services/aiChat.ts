@@ -4,7 +4,7 @@
  * Client sends OpenAI-format requests; server handles gateway protocol.
  */
 
-import { AI_GATEWAY_KEY, RAPIDAPI_KEY, API_URL, AI_MODEL } from '../constants/config';
+import { AI_GATEWAY_KEY, API_URL, AI_MODEL } from '../constants/config';
 import {
   getTodayFixtures,
   getLiveFixtures,
@@ -158,7 +158,7 @@ const TOOLS = [
         properties: {
           league_id: {
             type: 'number',
-            description: 'Lig ID: 203=Süper Lig (varsayılan), 39=Premier League, 140=La Liga, 135=Serie A, 78=Bundesliga, 2=Şampiyonlar Ligi, 3=Avrupa Ligi',
+            description: 'Lig ID: 203=Süper Lig (varsayılan), 39=Premier League, 140=La Liga, 135=Serie A, 78=Bundesliga, 2=UCL, 3=UEL',
           },
         },
       },
@@ -377,6 +377,13 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
         goals_avg: stats.goals.for.average.total,
         clean_sheets: stats.clean_sheet.total,
       });
+      const recentMatches = (stats.recent_fixtures ?? []).slice(0, 5).map(f => ({
+        date: f.fixture.date.split('T')[0],
+        home_team: f.teams.home.name,
+        away_team: f.teams.away.name,
+        home_score: f.goals.home ?? 0,
+        away_score: f.goals.away ?? 0,
+      }));
       return {
         widget: {
           type: 'team_form',
@@ -388,7 +395,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
             goals_scored: stats.goals.for.total.total,
             goals_conceded: stats.goals.against.total.total,
             clean_sheets: stats.clean_sheet.total,
-            recent_matches: [],
+            recent_matches: recentMatches,
           },
         },
         text: `${stats.team.name} son 5 maç formu: ${results.join(' ')}.`,
@@ -540,13 +547,9 @@ export async function getAIResponse(
   history?: Array<{ role: 'user' | 'assistant'; content: string }>,
 ): Promise<AIChatResponse> {
   const hasGatewayKey = AI_GATEWAY_KEY && AI_GATEWAY_KEY !== 'YOUR_AI_GATEWAY_KEY';
-  const hasRapidKey = RAPIDAPI_KEY && RAPIDAPI_KEY !== 'YOUR_RAPIDAPI_KEY';
 
-  if (!hasGatewayKey || !hasRapidKey) {
-    const missing = [];
-    if (!hasGatewayKey) missing.push('AI_GATEWAY_KEY');
-    if (!hasRapidKey) missing.push('RAPIDAPI_KEY');
-    throw new Error(`API anahtarları eksik: ${missing.join(', ')}. .env dosyasını kontrol edin ve "npx expo start --clear" çalıştırın.`);
+  if (!hasGatewayKey) {
+    throw new Error(`AI_GATEWAY_KEY eksik. .env dosyasını kontrol edin ve "npx expo start --clear" çalıştırın.`);
   }
 
   try {
