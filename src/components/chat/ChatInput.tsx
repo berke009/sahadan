@@ -6,10 +6,12 @@ import { useAnimatedPress } from '../../hooks/useAnimatedPress';
 import { SendIcon } from '../icons';
 
 const QUICK_PROMPTS = [
-  '⚽ Canli skorlar',
-  '📊 Puan durumu',
-  '🔥 Trend tahminler',
-  '🏆 Gol kralligi',
+  'Bugun maclar',
+  'Canli skorlar',
+  'Puan durumu',
+  'Gol kralligi',
+  'GS formu',
+  'Trend tahminler',
 ];
 
 interface ChatInputProps {
@@ -53,7 +55,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
       <View style={[styles.inputRow, focused && styles.inputRowFocused]}>
         <TextInput
           style={styles.input}
-          placeholder="Ask anything about football..."
+          placeholder="Futbol hakkinda bir seyler sor..."
           placeholderTextColor={COLORS.textSecondary}
           value={text}
           onChangeText={setText}

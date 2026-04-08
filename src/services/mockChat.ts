@@ -302,7 +302,7 @@ export function getMockResponse(message: string): MockResponse {
 
   // Default
   return {
-    content: 'Merhaba! Ben SOCCERA AI asistaniyim. Futbol hakkinda her seyi sorabilirsin:\n\n' +
+    content: 'Merhaba! Ben Sahadan AI asistaniyim. Futbol hakkinda her seyi sorabilirsin:\n\n' +
       '⚽ "Bugun hangi maclar var?" — Gunun maclari\n' +
       '📊 "GS vs FB olasiliklari" — AI mac analizi\n' +
       '🏟 "Puan durumu" — Lig tablosu\n' +

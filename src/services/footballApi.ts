@@ -36,7 +36,9 @@ export const LEAGUES = {
   europaLeague: 3,
 };
 
-const SEASON = 2024;
+// European seasons start in July/August — use the start year
+const _now = new Date();
+const SEASON = _now.getMonth() >= 6 ? _now.getFullYear() : _now.getFullYear() - 1;
 
 // ── Fixtures ────────────────────────────────────────────────
 

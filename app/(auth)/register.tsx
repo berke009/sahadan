@@ -72,7 +72,7 @@ export default function RegisterScreen() {
         {/* Header */}
         <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.header}>
           <BallIcon size={44} color={COLORS.accent} />
-          <Text style={styles.appName}>SOCCERA</Text>
+          <Text style={styles.appName}>SAHADAN</Text>
           <Text style={styles.subTitle}>Hesap Olustur</Text>
         </Animated.View>
 

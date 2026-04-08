@@ -56,10 +56,10 @@ export default function LoginScreen() {
         </Animated.View>
 
         <Animated.Text entering={FadeInDown.delay(200).duration(600)} style={styles.appName}>
-          SOCCERA
+          SAHADAN
         </Animated.Text>
         <Animated.Text entering={FadeInDown.delay(300).duration(600)} style={styles.tagline}>
-          The AI Football Super App
+          Futbol AI Asistani
         </Animated.Text>
 
         {/* Feature pills */}

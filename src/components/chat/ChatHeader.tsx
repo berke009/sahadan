@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -10,23 +10,58 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../constants/theme';
 import { BallIcon, MinimizeIcon, ExpandIcon } from '../icons';
+import { getLiveFixtures, ApiFixture } from '../../services/footballApi';
 
 interface ChatHeaderProps {
   expanded: boolean;
   onToggle: () => void;
+  onLiveTap?: () => void;
 }
 
-const LIVE_MATCH = {
-  home: 'MCI',
-  away: 'LIV',
-  homeScore: 2,
-  awayScore: 1,
-  minute: "67'",
-};
+interface LiveMatchInfo {
+  home: string;
+  away: string;
+  homeScore: number;
+  awayScore: number;
+  minute: string;
+}
 
-export function ChatHeader({ expanded, onToggle }: ChatHeaderProps) {
+function abbreviate(name: string): string {
+  // Short form: first 3 chars uppercase
+  return name.length > 3 ? name.slice(0, 3).toUpperCase() : name.toUpperCase();
+}
+
+export function ChatHeader({ expanded, onToggle, onLiveTap }: ChatHeaderProps) {
   const insets = useSafeAreaInsets();
   const dotOpacity = useSharedValue(1);
+  const [liveMatch, setLiveMatch] = useState<LiveMatchInfo | null>(null);
+
+  // Fetch live matches on mount and every 60s
+  const fetchLive = useCallback(async () => {
+    try {
+      const fixtures = await getLiveFixtures();
+      if (fixtures.length > 0) {
+        const f = fixtures[0];
+        setLiveMatch({
+          home: abbreviate(f.teams.home.name),
+          away: abbreviate(f.teams.away.name),
+          homeScore: f.goals.home ?? 0,
+          awayScore: f.goals.away ?? 0,
+          minute: `${f.fixture.status.elapsed ?? 0}'`,
+        });
+      } else {
+        setLiveMatch(null);
+      }
+    } catch {
+      setLiveMatch(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLive();
+    const interval = setInterval(fetchLive, 60000);
+    return () => clearInterval(interval);
+  }, [fetchLive]);
 
   useEffect(() => {
     dotOpacity.value = withRepeat(
@@ -49,20 +84,22 @@ export function ChatHeader({ expanded, onToggle }: ChatHeaderProps) {
       <View style={styles.left}>
         <BallIcon size={28} color={COLORS.accent} />
         <View style={styles.titleGroup}>
-          <Text style={styles.appName}>SOCCERA</Text>
-          <Text style={styles.tagline}>AI Football Assistant</Text>
+          <Text style={styles.appName}>SAHADAN</Text>
+          <Text style={styles.tagline}>Futbol AI Asistani</Text>
         </View>
       </View>
 
-      {/* Center — live score pill */}
-      <Pressable style={styles.livePill}>
-        <Animated.View style={[styles.liveDot, dotStyle]} />
-        <Text style={styles.liveLabel}>LIVE</Text>
-        <Text style={styles.scoreText}>
-          {LIVE_MATCH.home} {LIVE_MATCH.homeScore}–{LIVE_MATCH.awayScore} {LIVE_MATCH.away}
-        </Text>
-        <Text style={styles.minuteText}>{LIVE_MATCH.minute}</Text>
-      </Pressable>
+      {/* Center — live score pill (only when a match is live) */}
+      {liveMatch && (
+        <Pressable style={styles.livePill} onPress={onLiveTap}>
+          <Animated.View style={[styles.liveDot, dotStyle]} />
+          <Text style={styles.liveLabel}>CANLI</Text>
+          <Text style={styles.scoreText}>
+            {liveMatch.home} {liveMatch.homeScore}–{liveMatch.awayScore} {liveMatch.away}
+          </Text>
+          <Text style={styles.minuteText}>{liveMatch.minute}</Text>
+        </Pressable>
+      )}
 
       {/* Right — toggle */}
       <Pressable style={styles.toggleBtn} onPress={onToggle} hitSlop={10}>

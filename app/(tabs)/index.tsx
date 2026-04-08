@@ -18,6 +18,7 @@ import { ChatHeader } from '../../src/components/chat/ChatHeader';
 import { ChatDateSeparator } from '../../src/components/chat/ChatDateSeparator';
 import { TypingIndicator } from '../../src/components/chat/TypingIndicator';
 import { SoccerPitchWatermark, ChevronDownIcon } from '../../src/components/icons';
+import { WelcomeMessage } from '../../src/components/chat/WelcomeMessage';
 import { COLORS, SPACING } from '../../src/constants/theme';
 import { Message } from '../../src/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -88,7 +89,7 @@ export default function ChatScreen() {
 
   return (
     <View style={styles.container}>
-      <ChatHeader expanded={expanded} onToggle={toggleExpanded} />
+      <ChatHeader expanded={expanded} onToggle={toggleExpanded} onLiveTap={() => sendMessage('Canli skorlar')} />
 
       <Animated.View style={[styles.body, bodyStyle]}>
         <KeyboardAvoidingView
@@ -112,6 +113,7 @@ export default function ChatScreen() {
               onContentSizeChange={scrollToBottom}
               onScroll={handleScroll}
               scrollEventThrottle={100}
+              ListEmptyComponent={!loading ? <WelcomeMessage onSend={sendMessage} /> : null}
               ListFooterComponent={loading ? <TypingIndicator /> : null}
             />
 

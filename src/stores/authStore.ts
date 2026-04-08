@@ -8,7 +8,7 @@ const USE_MOCK_AUTH = true;
 
 const MOCK_USER: User = {
   id: 'mock-user-id',
-  email: 'demo@soccera.app',
+  email: 'demo@sahadan.app',
   app_metadata: {},
   user_metadata: {},
   aud: 'authenticated',
@@ -45,7 +45,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   initialize: () => {
     if (USE_MOCK_AUTH) {
-      set({ initialized: true });
+      // Auto-login so web users skip the auth screen
+      set({
+        initialized: true,
+        session: { access_token: 'mock-token' } as Session,
+        user: MOCK_USER,
+        profile: MOCK_PROFILE,
+      });
       return;
     }
 
