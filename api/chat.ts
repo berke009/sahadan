@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateText } from 'ai';
+import { generateText, jsonSchema } from 'ai';
 import { gateway } from '@ai-sdk/gateway';
-import { z } from 'zod';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -17,38 +16,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const systemMsg = messages.find((m: any) => m.role === 'system')?.content ?? '';
     const chatMessages = messages.filter((m: any) => m.role !== 'system');
 
-    // Convert raw JSON schema tools to AI SDK zod tools
+    // Use jsonSchema() helper — passes raw JSON Schema directly, no zod conversion
     const sdkTools: Record<string, any> = {};
     if (rawTools) {
       for (const t of rawTools) {
         const fn = t.function;
-        // Build a zod object from JSON schema properties
-        const props = fn.parameters?.properties ?? {};
-        const required: string[] = fn.parameters?.required ?? [];
-        const shape: Record<string, z.ZodTypeAny> = {};
-        for (const [key, val] of Object.entries(props as Record<string, any>)) {
-          let field: z.ZodTypeAny =
-            val.type === 'number' ? z.number() : z.string();
-          if (!required.includes(key)) field = field.optional();
-          shape[key] = field;
-        }
+        // Ensure parameters always has type:object
+        const parameters = {
+          type: 'object',
+          properties: fn.parameters?.properties ?? {},
+          required: fn.parameters?.required ?? [],
+        };
         sdkTools[fn.name] = {
           description: fn.description,
-          parameters: z.object(shape),
+          parameters: jsonSchema(parameters),
         };
       }
     }
 
-    const result = await (generateText as any)({
+    const result = await generateText({
       model: gateway('openai/gpt-4o-mini'),
       system: systemMsg,
       messages: chatMessages,
       tools: Object.keys(sdkTools).length ? sdkTools : undefined,
       toolChoice: 'auto',
       maxTokens: 1024,
-    });
+    } as any);
 
-    // Return OpenAI-compatible shape so frontend works unchanged
     const toolCall = result.toolCalls?.[0];
     return res.status(200).json({
       choices: [
@@ -63,7 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     type: 'function',
                     function: {
                       name: toolCall.toolName,
-                      arguments: JSON.stringify(toolCall.args ?? toolCall.input ?? {}),
+                      arguments: JSON.stringify((toolCall as any).args ?? (toolCall as any).input ?? {}),
                     },
                   },
                 ]
