@@ -41,6 +41,17 @@ export const COLORS = {
   draw: '#FF9F0A',
   lossResult: '#FF453A',
   pending: '#FF9F0A',
+
+  // Rank badges
+  gold: '#FFD700',
+  silver: '#C0C0C0',
+  bronze: '#CD7F32',
+
+  // Glassmorphism
+  glass: 'rgba(255, 255, 255, 0.04)',
+  glassBorder: 'rgba(255, 255, 255, 0.08)',
+  glassAccent: 'rgba(0, 255, 135, 0.08)',
+  glassAccentBorder: 'rgba(0, 255, 135, 0.18)',
 } as const;
 
 export const SPACING = {

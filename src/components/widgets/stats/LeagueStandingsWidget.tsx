@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-nati
 import { StandingEntry } from '../../../types';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../../constants/theme';
 import { FormCircle } from '../../ui/Badge';
+import { TeamLogo } from '../../ui/TeamLogo';
 import { useChatStore } from '../../../stores/chatStore';
 
 interface Props {
@@ -12,42 +13,64 @@ interface Props {
 export function LeagueStandingsWidget({ standings }: Props) {
   const { addWidgetAction } = useChatStore();
 
-  const getRowColor = (rank: number, index: number) => {
-    if (rank <= 4) return COLORS.accent + '18';
-    if (rank >= 17) return COLORS.lossResult + '18';
-    return index % 2 === 0 ? 'transparent' : COLORS.surface + '40';
+  const getRowStyle = (rank: number) => {
+    if (rank <= 4) return styles.qualRow;
+    if (rank >= standings.length - 2) return styles.relegationRow;
+    return undefined;
+  };
+
+  const getZoneIndicator = (rank: number) => {
+    if (rank <= 4) return styles.zoneGreen;
+    if (rank >= standings.length - 2) return styles.zoneRed;
+    return styles.zoneNone;
   };
 
   return (
     <ScrollView style={styles.container} nestedScrollEnabled>
+      {/* Header */}
       <View style={styles.headerRow}>
         <Text style={[styles.headerCell, styles.rankCol]}>#</Text>
-        <Text style={[styles.headerCell, styles.teamCol]}>Takim</Text>
+        <View style={styles.teamHeaderCol}>
+          <Text style={styles.headerCell}>Takim</Text>
+        </View>
         <Text style={[styles.headerCell, styles.statCol]}>O</Text>
         <Text style={[styles.headerCell, styles.statCol]}>G</Text>
         <Text style={[styles.headerCell, styles.statCol]}>B</Text>
         <Text style={[styles.headerCell, styles.statCol]}>M</Text>
-        <Text style={[styles.headerCell, styles.statCol]}>AV</Text>
+        <Text style={[styles.headerCell, styles.gdCol]}>AV</Text>
         <Text style={[styles.headerCell, styles.ptsCol]}>P</Text>
+        <View style={styles.formCol}>
+          <Text style={styles.headerCell}>Form</Text>
+        </View>
       </View>
-      {standings.map((entry, index) => (
+
+      {/* Rows */}
+      {standings.map((entry) => (
         <TouchableOpacity
           key={entry.rank}
-          style={[
-            styles.row,
-            { backgroundColor: getRowColor(entry.rank, index) },
-            entry.rank <= 4 && styles.qualificationRow,
-          ]}
+          style={[styles.row, getRowStyle(entry.rank)]}
           onPress={() => addWidgetAction(`${entry.team} takim detaylarini goster`)}
+          activeOpacity={0.6}
         >
-          <Text style={[styles.cell, styles.rankCol]}>{entry.rank}</Text>
-          <Text style={[styles.cell, styles.teamCol]} numberOfLines={1}>{entry.team}</Text>
+          <View style={[styles.zoneBar, getZoneIndicator(entry.rank)]} />
+          <Text style={[styles.cell, styles.rankCol, styles.rankText]}>{entry.rank}</Text>
+          <View style={styles.teamCell}>
+            <TeamLogo uri={entry.team_logo} name={entry.team} size="sm" />
+            <Text style={styles.teamName} numberOfLines={1}>{entry.team}</Text>
+          </View>
           <Text style={[styles.cell, styles.statCol]}>{entry.played}</Text>
           <Text style={[styles.cell, styles.statCol]}>{entry.won}</Text>
           <Text style={[styles.cell, styles.statCol]}>{entry.drawn}</Text>
           <Text style={[styles.cell, styles.statCol]}>{entry.lost}</Text>
-          <Text style={[styles.cell, styles.statCol]}>{entry.goal_difference > 0 ? '+' : ''}{entry.goal_difference}</Text>
+          <Text style={[styles.cell, styles.gdCol, entry.goal_difference > 0 && styles.gdPositive, entry.goal_difference < 0 && styles.gdNegative]}>
+            {entry.goal_difference > 0 ? '+' : ''}{entry.goal_difference}
+          </Text>
           <Text style={[styles.cell, styles.ptsCol, styles.points]}>{entry.points}</Text>
+          <View style={styles.formCol}>
+            {entry.form.map((r, i) => (
+              <FormCircle key={i} result={r} />
+            ))}
+          </View>
         </TouchableOpacity>
       ))}
     </ScrollView>
@@ -56,14 +79,16 @@ export function LeagueStandingsWidget({ standings }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    maxHeight: 350,
+    maxHeight: 420,
     padding: SPACING.xs,
   },
   headerRow: {
     flexDirection: 'row',
-    paddingVertical: SPACING.xs,
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+    marginBottom: 2,
   },
   headerCell: {
     color: COLORS.textMuted,
@@ -72,23 +97,63 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    paddingVertical: 10,
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.border + '50',
-    borderRadius: BORDER_RADIUS.sm,
     alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border + '30',
+    borderRadius: BORDER_RADIUS.sm,
   },
-  qualificationRow: {
-    borderLeftWidth: 2,
-    borderLeftColor: COLORS.accent,
+  qualRow: {
+    backgroundColor: COLORS.glassAccent,
+  },
+  relegationRow: {
+    backgroundColor: 'rgba(255, 69, 58, 0.06)',
+  },
+  zoneBar: {
+    width: 3,
+    height: '80%',
+    borderRadius: 2,
+    marginRight: 2,
+  },
+  zoneGreen: {
+    backgroundColor: COLORS.accent,
+  },
+  zoneRed: {
+    backgroundColor: COLORS.lossResult,
+  },
+  zoneNone: {
+    backgroundColor: 'transparent',
+  },
+  rankCol: { width: 22, textAlign: 'center' },
+  rankText: { fontWeight: '700', color: COLORS.textSecondary },
+  teamHeaderCol: { flex: 1, paddingLeft: SPACING.xs },
+  teamCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingRight: 4,
+  },
+  teamName: {
+    color: COLORS.text,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '500',
+    flex: 1,
   },
   cell: {
     color: COLORS.text,
-    fontSize: FONT_SIZES.sm,
+    fontSize: FONT_SIZES.xs,
   },
-  rankCol: { width: 24, textAlign: 'center' },
-  teamCol: { flex: 1, paddingHorizontal: SPACING.xs },
-  statCol: { width: 32, textAlign: 'center' },
-  ptsCol: { width: 30, textAlign: 'center' },
-  points: { fontWeight: '700', color: COLORS.odds },
+  statCol: { width: 26, textAlign: 'center' },
+  gdCol: { width: 30, textAlign: 'center' },
+  gdPositive: { color: COLORS.accent },
+  gdNegative: { color: COLORS.lossResult },
+  ptsCol: { width: 28, textAlign: 'center' },
+  points: { fontWeight: '800', color: COLORS.accent, fontSize: FONT_SIZES.sm },
+  formCol: {
+    flexDirection: 'row',
+    width: 60,
+    justifyContent: 'flex-end',
+    gap: 2,
+  },
 });

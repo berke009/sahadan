@@ -8,6 +8,13 @@ export const RAPIDAPI_KEY = process.env.EXPO_PUBLIC_RAPIDAPI_KEY || 'YOUR_RAPIDA
 // Get from: Vercel Dashboard → AI → Gateway
 export const AI_GATEWAY_KEY = process.env.EXPO_PUBLIC_AI_GATEWAY_KEY || 'YOUR_AI_GATEWAY_KEY';
 
+// AI model — used by both client and server
+export const AI_MODEL = 'gpt-4o';
+
+// Vercel deployment URL (needed for native to reach /api/chat proxy)
+// Web uses relative URL, native needs absolute URL
+export const API_URL = process.env.EXPO_PUBLIC_API_URL || '';
+
 export const IS_OFFLINE = !SUPABASE_ANON_KEY;
 
 if (__DEV__) {

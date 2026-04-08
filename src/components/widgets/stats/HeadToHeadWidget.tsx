@@ -2,133 +2,237 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { HeadToHead } from '../../../types';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../../constants/theme';
+import { Badge } from '../../ui/Badge';
 
 interface Props {
   data: HeadToHead;
 }
 
+function ComparisonBar({ left, right, label }: { left: number; right: number; label: string }) {
+  const total = left + right || 1;
+  const leftPct = (left / total) * 100;
+  const rightPct = (right / total) * 100;
+
+  return (
+    <View style={barStyles.container}>
+      <Text style={[barStyles.value, left >= right && barStyles.highlight]}>{left}</Text>
+      <View style={barStyles.barContainer}>
+        <View style={barStyles.barTrack}>
+          <View style={[barStyles.barLeft, { width: `${leftPct}%` }]} />
+          <View style={[barStyles.barRight, { width: `${rightPct}%` }]} />
+        </View>
+        <Text style={barStyles.label}>{label}</Text>
+      </View>
+      <Text style={[barStyles.value, right >= left && barStyles.highlight]}>{right}</Text>
+    </View>
+  );
+}
+
 export function HeadToHeadWidget({ data }: Props) {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Karsilastirma</Text>
+      <Text style={styles.sectionLabel}>Karsilastirma</Text>
 
+      {/* Teams header */}
       <View style={styles.teamsRow}>
-        <Text style={styles.teamName}>{data.team_a}</Text>
-        <Text style={styles.vs}>vs</Text>
-        <Text style={styles.teamName}>{data.team_b}</Text>
+        <View style={styles.teamCol}>
+          <Text style={styles.teamName} numberOfLines={1}>{data.team_a}</Text>
+        </View>
+        <View style={styles.vsContainer}>
+          <Text style={styles.vsText}>VS</Text>
+          <Text style={styles.totalMatches}>{data.total_matches} mac</Text>
+        </View>
+        <View style={styles.teamCol}>
+          <Text style={styles.teamName} numberOfLines={1}>{data.team_b}</Text>
+        </View>
       </View>
 
+      {/* Comparison bars */}
       <View style={styles.statsContainer}>
-        <StatRow label="Galibiyet" left={data.team_a_wins} right={data.team_b_wins} />
-        <StatRow label="Beraberlik" left={data.draws} right={data.draws} center />
-        <StatRow label="Toplam Gol" left={data.team_a_goals} right={data.team_b_goals} />
-        <StatRow label="Toplam Mac" left={data.total_matches} right={data.total_matches} center />
+        <ComparisonBar left={data.team_a_wins} right={data.team_b_wins} label="Galibiyet" />
+        <ComparisonBar left={data.draws} right={data.draws} label="Beraberlik" />
+        <ComparisonBar left={data.team_a_goals} right={data.team_b_goals} label="Toplam Gol" />
       </View>
 
+      {/* Recent matches */}
       {data.recent_matches.length > 0 && (
         <View style={styles.recentSection}>
           <Text style={styles.recentTitle}>Son Karsilasmalar</Text>
-          {data.recent_matches.slice(0, 5).map((match, i) => (
-            <View key={i} style={styles.recentRow}>
-              <Text style={styles.recentDate}>{new Date(match.date).toLocaleDateString('tr-TR')}</Text>
-              <Text style={styles.recentScore}>
-                {match.home_team} {match.home_score} - {match.away_score} {match.away_team}
-              </Text>
-            </View>
-          ))}
+          {data.recent_matches.slice(0, 5).map((match, i) => {
+            const homeWin = match.home_score > match.away_score;
+            const draw = match.home_score === match.away_score;
+            return (
+              <View key={i} style={styles.recentRow}>
+                <Text style={styles.recentDate}>
+                  {new Date(match.date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
+                </Text>
+                <View style={styles.recentMatch}>
+                  <Text style={[styles.recentTeam, homeWin && styles.winnerText]} numberOfLines={1}>
+                    {match.home_team}
+                  </Text>
+                  <View style={styles.recentScoreBadge}>
+                    <Text style={styles.recentScoreText}>
+                      {match.home_score} - {match.away_score}
+                    </Text>
+                  </View>
+                  <Text style={[styles.recentTeam, !homeWin && !draw && styles.winnerText]} numberOfLines={1}>
+                    {match.away_team}
+                  </Text>
+                </View>
+                <Badge
+                  label={draw ? 'B' : homeWin ? (match.home_team === data.team_a ? 'G' : 'M') : (match.away_team === data.team_a ? 'G' : 'M')}
+                  variant={draw ? 'draw' : (homeWin ? (match.home_team === data.team_a ? 'win' : 'loss') : (match.away_team === data.team_a ? 'win' : 'loss'))}
+                />
+              </View>
+            );
+          })}
         </View>
       )}
     </View>
   );
 }
 
-function StatRow({ label, left, right, center }: { label: string; left: number; right: number; center?: boolean }) {
-  return (
-    <View style={styles.statRow}>
-      <Text style={[styles.statValue, !center && left > right && styles.highlight]}>{left}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={[styles.statValue, !center && right > left && styles.highlight]}>{right}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
+const barStyles = StyleSheet.create({
   container: {
-    padding: SPACING.sm,
-  },
-  title: {
-    color: COLORS.textSecondary,
-    fontSize: FONT_SIZES.sm,
-    textAlign: 'center',
-    marginBottom: SPACING.sm,
-  },
-  teamsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.lg,
-  },
-  teamName: {
-    color: COLORS.text,
-    fontSize: FONT_SIZES.lg,
-    fontWeight: '700',
-    flex: 1,
-    textAlign: 'center',
-  },
-  vs: {
-    color: COLORS.textMuted,
-    fontSize: FONT_SIZES.sm,
-    marginHorizontal: SPACING.sm,
-  },
-  statsContainer: {
     gap: SPACING.sm,
   },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: COLORS.cardLight,
-    borderRadius: BORDER_RADIUS.sm,
-    padding: SPACING.md,
-  },
-  statLabel: {
+  value: {
     color: COLORS.textSecondary,
-    fontSize: FONT_SIZES.sm,
-  },
-  statValue: {
-    color: COLORS.text,
-    fontSize: FONT_SIZES.lg,
+    fontSize: FONT_SIZES.md,
     fontWeight: '700',
-    width: 40,
+    width: 28,
     textAlign: 'center',
   },
   highlight: {
     color: COLORS.accent,
   },
+  barContainer: {
+    flex: 1,
+    gap: 3,
+  },
+  barTrack: {
+    flexDirection: 'row',
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    backgroundColor: COLORS.border,
+  },
+  barLeft: {
+    backgroundColor: COLORS.accent,
+    borderTopLeftRadius: 3,
+    borderBottomLeftRadius: 3,
+  },
+  barRight: {
+    backgroundColor: COLORS.lossResult + '80',
+    borderTopRightRadius: 3,
+    borderBottomRightRadius: 3,
+  },
+  label: {
+    color: COLORS.textMuted,
+    fontSize: 9,
+    textAlign: 'center',
+  },
+});
+
+const styles = StyleSheet.create({
+  container: {
+    padding: SPACING.md,
+  },
+  sectionLabel: {
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZES.xs,
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  teamsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.xl,
+  },
+  teamCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  teamName: {
+    color: COLORS.text,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  vsContainer: {
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+  },
+  vsText: {
+    color: COLORS.textMuted,
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  totalMatches: {
+    color: COLORS.textMuted,
+    fontSize: 9,
+    marginTop: 2,
+  },
+  statsContainer: {
+    gap: SPACING.md,
+    marginBottom: SPACING.lg,
+  },
   recentSection: {
-    marginTop: SPACING.lg,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: SPACING.md,
   },
   recentTitle: {
     color: COLORS.textSecondary,
-    fontSize: FONT_SIZES.sm,
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
     marginBottom: SPACING.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   recentRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: SPACING.xs,
+    alignItems: 'center',
+    paddingVertical: 6,
     borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.border + '50',
+    borderBottomColor: COLORS.border + '30',
+    gap: SPACING.sm,
   },
   recentDate: {
     color: COLORS.textMuted,
     fontSize: FONT_SIZES.xs,
-    width: 70,
+    width: 52,
   },
-  recentScore: {
-    color: COLORS.text,
-    fontSize: FONT_SIZES.sm,
+  recentMatch: {
     flex: 1,
-    textAlign: 'right',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  recentTeam: {
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZES.xs,
+    flex: 1,
+  },
+  winnerText: {
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+  recentScoreBadge: {
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  recentScoreText: {
+    color: COLORS.text,
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '700',
   },
 });

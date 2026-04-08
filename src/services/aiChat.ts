@@ -1,9 +1,10 @@
 /**
- * AI Chat Service — Sahadan | Vercel AI Gateway (GPT-4o-mini)
- * Full Turkish football analysis with real-time data and widget rendering.
+ * AI Chat Service — Sahadan
+ * Calls /api/chat proxy which uses AI SDK server-side.
+ * Client sends OpenAI-format requests; server handles gateway protocol.
  */
 
-import { AI_GATEWAY_KEY, RAPIDAPI_KEY } from '../constants/config';
+import { AI_GATEWAY_KEY, RAPIDAPI_KEY, API_URL, AI_MODEL } from '../constants/config';
 import {
   getTodayFixtures,
   getLiveFixtures,
@@ -123,63 +124,28 @@ function detectLeague(msg: string): number {
 
 // ── Master System Prompt ─────────────────────────────────────
 
-const SYSTEM_PROMPT = `Sen SAHADAN — Türkiye'nin en iyi futbol analiz uygulamasının AI asistanısın.
+const SYSTEM_PROMPT = `Sen SAHADAN — Türkiye'nin futbol analiz uygulamasının AI asistanı.
 
-## KİMLİĞİN
-- Adın: Sahadan AI
-- Uzmanlık: Türk futbolu, Süper Lig, Avrupa ligleri, canlı skor takibi, maç analizi
+## KİMLİK
+- Uzmanlık: Türk futbolu, Süper Lig, Avrupa ligleri, canlı skor, maç analizi
 - Dil: Kullanıcı Türkçe yazarsa Türkçe, İngilizce yazarsa İngilizce yanıt ver
-- Karakter: Samimi, bilgili, futbol tutkunu bir analist gibi konuş
+- Karakter: Samimi, bilgili futbol analisti
 
-## WIDGET SİSTEMİ — KRİTİK KURALLAR
-Kullanıcı futbolla ilgili herhangi bir şey sorduğunda MUTLAKA ilgili tool'u çağırarak gerçek veri getir ve widget göster.
-Hiçbir zaman widget gerektiren bir soruya sade metin yanıtı verme.
+## KRİTİK KURAL — TOOL KULLANIMI
+Futbol verisi gerektiren HER soruya MUTLAKA uygun tool'u çağır.
+Asla futbol verisini tool çağırmadan kendin uydurma veya tahmin etme.
+Lig belirtilmezse Süper Lig (203) varsay.
 
-### Tool → Widget Eşleştirmesi:
-| Kullanıcı Ne İsterse | Tool | Widget |
-|---|---|---|
-| "bugün maçlar", "maç var mı", "fikstür", "program", "akşam maçları" | get_today_fixtures | hot_matches |
-| "canlı", "canlı skor", "şu an", "kaç kaç", "oynuyor mu" | get_live_scores | live_score |
-| "puan durumu", "tablo", "sıralama", "kaçıncı", "lider kim" | get_standings | league_standings |
-| "gol krallığı", "en çok gol", "golcüler", "bomber" | get_top_scorers | top_scorers |
-| "form", "son maçlar", "nasıl oynuyor", "performans", "istatistik", "kaç galibiyet" | get_team_form | team_form |
-| "karşılaştır", "h2h", "derbisi", "vs", "aralarındaki", "geçmiş maçlar" | get_head_to_head | head_to_head |
-
-## LİG KİMLİKLERİ — DAIMA DOĞRU KULLAN
-- 203 = Türkiye Süper Lig (varsayılan — kullanıcı lig belirtmezse bunu kullan)
-- 39  = Premier League (İngiltere)
-- 140 = La Liga (İspanya)
-- 135 = Serie A (İtalya)
-- 78  = Bundesliga (Almanya)
-- 2   = UEFA Şampiyonlar Ligi
-- 3   = UEFA Avrupa Ligi
-
-## FUTBOL BİLGİSİ
-Sen deneyimli bir futbol analistisin. Şunlarda derinlemesine bilgin var:
-- Türk futbolu: Süper Lig tarihi, Galatasaray, Fenerbahçe, Beşiktaş, Trabzonspor ve diğer tüm kulüpler
-- Taktik & formasyon analizi: 4-3-3, 4-2-3-1, pressing, gegenpress, pozisyon oyunu vb.
-- Oyuncu değerlendirme: teknik özellikler, fiziksel nitelikler, istatistik yorumlama
-- Avrupa futbolu: Premier League, La Liga, Serie A, Bundesliga, Ligue 1
-- Uluslararası futbol: EURO, Dünya Kupası, Milli Takım analizleri
-- Bahis piyasası: MS 1-X-2, Karşılıklı Gol, Alt/Üst, İlk Yarı, Handikap oranları
+Kısaltmalar: GS=Galatasaray, FB=Fenerbahçe, BJK=Beşiktaş, TS=Trabzonspor
 
 ## YANIT KURALLARI
-1. Widget gösterildikten sonra maksimum 2 kısa cümle yaz — verileri tekrar sayma
-2. Analiz sorusunda (widget gerekmiyorsa) akıcı, bilgili Türkçe yaz
+1. Tool sonucu geldikten sonra verileri TEKRAR SAYMA — widget zaten gösteriyor
+2. Bunun yerine 2-3 cümlelik kısa ANALİZ yaz: trend, form değerlendirmesi, dikkat çekici istatistik
 3. Bahis tavsiyesi VERME — analiz sun, kararı kullanıcıya bırak
-4. Takım adlarını doğru yaz: "Galatasaray", "Fenerbahçe", "Beşiktaş", "Trabzonspor"
-5. Soru belirsizse en mantıklı yorumu yap ve tool çağır, onay bekleme
-6. Kullanıcı "selam", "nasılsın" gibi genel sorular sorarsa kısa ve samimi cevap ver
+4. Belirsiz soruyu en mantıklı şekilde yorumla ve tool çağır, onay bekleme
+5. "Selam", "nasılsın" gibi genel sorulara kısa samimi cevap ver — tool çağırma`;
 
-## ÖRNEK DAVRANIŞLAR
-- "GS nasıl oynuyor?" → get_team_form(team_name="Galatasaray")
-- "Bugün ne var?" → get_today_fixtures(league_id=203)
-- "Premier League tablosu" → get_standings(league_id=39)
-- "GS FB derbisi" → get_head_to_head(team1_name="Galatasaray", team2_name="Fenerbahçe")
-- "Süper Lig gol krallığı" → get_top_scorers(league_id=203)
-- "Şu an canlı maç var mı?" → get_live_scores()`;
-
-// ── Tool Definitions ─────────────────────────────────────────
+// ── Tool Definitions (OpenAI format — server converts to AI SDK) ─
 
 const TOOLS = [
   {
@@ -294,18 +260,32 @@ const TOOLS = [
 
 // ── Tool execution ───────────────────────────────────────────
 
-async function executeTool(name: string, input: Record<string, unknown>): Promise<{ widget: WidgetPayload | null; text: string }> {
+interface ToolResult {
+  widget: WidgetPayload | null;
+  text: string;
+  richText: string;
+}
+
+async function executeTool(name: string, input: Record<string, unknown>): Promise<ToolResult> {
   switch (name) {
     case 'get_today_fixtures': {
       const leagueId = (input.league_id as number | undefined);
       const fixtures = await getTodayFixtures(leagueId);
       if (fixtures.length === 0) {
-        return { widget: null, text: 'Bugün bu ligde maç bulunmuyor.' };
+        return { widget: null, text: 'Bugün bu ligde maç bulunmuyor.', richText: '{"matches":[]}' };
       }
       const matches = fixtures.map(apiFixtureToMatch);
+      const richText = JSON.stringify({
+        matches: matches.slice(0, 12).map(m => ({
+          home: m.home_team, away: m.away_team, league: m.league,
+          kickoff: m.kickoff, status: m.status,
+          score: m.home_score != null ? `${m.home_score}-${m.away_score}` : null,
+        })),
+      });
       return {
         widget: { type: 'hot_matches', matches },
         text: `Bugün ${matches.length} maç var.`,
+        richText,
       };
     }
 
@@ -313,12 +293,20 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       const leagueId = (input.league_id as number | undefined);
       const fixtures = await getLiveFixtures(leagueId);
       if (fixtures.length === 0) {
-        return { widget: null, text: 'Şu an oynanan maç yok.' };
+        return { widget: null, text: 'Şu an oynanan maç yok.', richText: '{"matches":[]}' };
       }
       const liveMatches = fixtures.map(apiFixtureToLiveMatch);
+      const richText = JSON.stringify({
+        matches: liveMatches.slice(0, 10).map(m => ({
+          home: m.home_team, away: m.away_team, league: m.league,
+          score: `${m.home_score}-${m.away_score}`, elapsed: m.elapsed,
+          events: (m.events ?? []).slice(-5).map(e => `${e.minute}' ${e.type} ${e.player}`),
+        })),
+      });
       return {
         widget: { type: 'live_score', matches: liveMatches },
         text: `${liveMatches.length} maç şu an canlı!`,
+        richText,
       };
     }
 
@@ -326,12 +314,20 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       const leagueId = (input.league_id as number) ?? LEAGUES.superLig;
       const standings = await getStandings(leagueId);
       if (standings.length === 0) {
-        return { widget: null, text: 'Puan durumu alınamadı.' };
+        return { widget: null, text: 'Puan durumu alınamadı.', richText: '{}' };
       }
       const entries = standings.map(standingToEntry);
+      const richText = JSON.stringify({
+        standings: entries.slice(0, 10).map(e => ({
+          rank: e.rank, team: e.team, pts: e.points, p: e.played,
+          w: e.won, d: e.drawn, l: e.lost, gd: e.goal_difference,
+          form: e.form.join(''),
+        })),
+      });
       return {
         widget: { type: 'league_standings', standings: entries },
         text: `Lider: ${entries[0]?.team ?? 'Bilinmiyor'} (${entries[0]?.points ?? 0} puan).`,
+        richText,
       };
     }
 
@@ -339,12 +335,19 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       const leagueId = (input.league_id as number) ?? LEAGUES.superLig;
       const scorers = await getTopScorers(leagueId);
       if (scorers.length === 0) {
-        return { widget: null, text: 'Gol krallığı verisi alınamadı.' };
+        return { widget: null, text: 'Gol krallığı verisi alınamadı.', richText: '{}' };
       }
       const topScorers = scorers.slice(0, 10).map((s, i) => scorerToTopScorer(s, i + 1));
+      const richText = JSON.stringify({
+        scorers: topScorers.map(s => ({
+          rank: s.rank, name: s.name, team: s.team,
+          goals: s.goals, assists: s.assists, matches: s.matches,
+        })),
+      });
       return {
         widget: { type: 'top_scorers', scorers: topScorers },
         text: `Gol kralı: ${topScorers[0].name} — ${topScorers[0].goals} gol.`,
+        richText,
       };
     }
 
@@ -354,14 +357,26 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       const teams = await searchTeam(teamName);
       const team = teams[0] as ApiTeam | undefined;
       if (!team) {
-        return { widget: null, text: `"${teamName}" takımı bulunamadı.` };
+        return { widget: null, text: `"${teamName}" takımı bulunamadı.`, richText: '{}' };
       }
       const stats = await getTeamStats(team.team.id, leagueId);
       if (!stats) {
-        return { widget: null, text: `${teamName} istatistikleri alınamadı.` };
+        return { widget: null, text: `${teamName} istatistikleri alınamadı.`, richText: '{}' };
       }
       const formStr = stats.form ?? '';
       const results = formStr.split('').slice(-5).map((c) => (c === 'W' ? 'W' : c === 'D' ? 'D' : 'L')) as ('W' | 'D' | 'L')[];
+      const winPct = stats.fixtures.played.total > 0
+        ? Math.round((stats.fixtures.wins.total / stats.fixtures.played.total) * 100)
+        : 0;
+      const richText = JSON.stringify({
+        team: stats.team.name, form: results.join(''),
+        played: stats.fixtures.played.total, wins: stats.fixtures.wins.total,
+        draws: stats.fixtures.draws.total, losses: stats.fixtures.loses.total,
+        win_pct: winPct, goals_scored: stats.goals.for.total.total,
+        goals_conceded: stats.goals.against.total.total,
+        goals_avg: stats.goals.for.average.total,
+        clean_sheets: stats.clean_sheet.total,
+      });
       return {
         widget: {
           type: 'team_form',
@@ -369,9 +384,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
             team: stats.team.name,
             team_logo: stats.team.logo,
             results,
-            win_percentage: stats.fixtures.played.total > 0
-              ? Math.round((stats.fixtures.wins.total / stats.fixtures.played.total) * 100)
-              : 0,
+            win_percentage: winPct,
             goals_scored: stats.goals.for.total.total,
             goals_conceded: stats.goals.against.total.total,
             clean_sheets: stats.clean_sheet.total,
@@ -379,6 +392,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
           },
         },
         text: `${stats.team.name} son 5 maç formu: ${results.join(' ')}.`,
+        richText,
       };
     }
 
@@ -389,7 +403,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       const t1 = teams1[0] as ApiTeam | undefined;
       const t2 = teams2[0] as ApiTeam | undefined;
       if (!t1 || !t2) {
-        return { widget: null, text: `Takımlar bulunamadı: ${name1} veya ${name2}` };
+        return { widget: null, text: `Takımlar bulunamadı: ${name1} veya ${name2}`, richText: '{}' };
       }
       const fixtures = await getHeadToHead(t1.team.id, t2.team.id, 10);
       const finished = fixtures.filter((f) => f.fixture.status.short === 'FT');
@@ -403,6 +417,14 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
         home_score: f.goals.home ?? 0,
         away_score: f.goals.away ?? 0,
       }));
+      const t1Goals = finished.reduce((s, f) => s + (f.teams.home.id === t1.team.id ? f.goals.home ?? 0 : f.goals.away ?? 0), 0);
+      const t2Goals = finished.reduce((s, f) => s + (f.teams.home.id === t2.team.id ? f.goals.home ?? 0 : f.goals.away ?? 0), 0);
+      const richText = JSON.stringify({
+        team_a: t1.team.name, team_b: t2.team.name,
+        total: finished.length, a_wins: t1Wins, b_wins: t2Wins, draws,
+        a_goals: t1Goals, b_goals: t2Goals,
+        recent: recent.map(r => `${r.date}: ${r.home_team} ${r.home_score}-${r.away_score} ${r.away_team}`),
+      });
       return {
         widget: {
           type: 'head_to_head',
@@ -413,21 +435,66 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
             team_a_wins: t1Wins,
             team_b_wins: t2Wins,
             draws,
-            team_a_goals: finished.reduce((s, f) => s + (f.teams.home.id === t1.team.id ? f.goals.home ?? 0 : f.goals.away ?? 0), 0),
-            team_b_goals: finished.reduce((s, f) => s + (f.teams.home.id === t2.team.id ? f.goals.home ?? 0 : f.goals.away ?? 0), 0),
+            team_a_goals: t1Goals,
+            team_b_goals: t2Goals,
             recent_matches: recent,
           },
         },
         text: `${t1.team.name} ${t1Wins} galibiyet, ${draws} beraberlik, ${t2Wins} mağlubiyet (son ${finished.length} maç).`,
+        richText,
       };
     }
 
     default:
-      return { widget: null, text: '' };
+      return { widget: null, text: '', richText: '{}' };
   }
 }
 
-// ── API call ─────────────────────────────────────────────────
+// ── Client-side fallback: detect tool when model misses ──────
+
+const TEAM_ALIASES: Record<string, string> = {
+  gs: 'Galatasaray', galatasaray: 'Galatasaray', cimbom: 'Galatasaray',
+  fb: 'Fenerbahçe', fenerbahçe: 'Fenerbahçe', fenerbahce: 'Fenerbahçe', fener: 'Fenerbahçe',
+  bjk: 'Beşiktaş', beşiktaş: 'Beşiktaş', besiktas: 'Beşiktaş', kartal: 'Beşiktaş',
+  ts: 'Trabzonspor', trabzonspor: 'Trabzonspor',
+  adana: 'Adana Demirspor', sivas: 'Sivasspor', antalya: 'Antalyaspor',
+  konya: 'Konyaspor', kasimpasa: 'Kasımpaşa', basaksehir: 'Başakşehir',
+};
+
+function detectFallbackTool(msg: string): { name: string; input: Record<string, unknown> } | null {
+  const m = msg.toLowerCase();
+  const leagueId = detectLeague(msg);
+
+  if (/bugün|maç var|fikstür|program|akşam|today|fixture|schedule/i.test(m))
+    return { name: 'get_today_fixtures', input: { league_id: leagueId } };
+  if (/canlı|live|şu an|kaç kaç|oynuyor mu|ne durumda/i.test(m))
+    return { name: 'get_live_scores', input: { league_id: leagueId } };
+  if (/puan durumu|tablo|sıralama|kaçıncı|lider|standing|klasman/i.test(m))
+    return { name: 'get_standings', input: { league_id: leagueId } };
+  if (/gol kral|golcü|en çok gol|bomber|top scorer|golden boot/i.test(m))
+    return { name: 'get_top_scorers', input: { league_id: leagueId } };
+
+  // H2H detection (need two team names)
+  if (/vs|karşılaştır|h2h|derbi|aralarındaki|karşı karşıya/i.test(m)) {
+    const found = Object.keys(TEAM_ALIASES).filter(k => m.includes(k));
+    const uniqueTeams = [...new Set(found.map(k => TEAM_ALIASES[k]))];
+    if (uniqueTeams.length >= 2) {
+      return { name: 'get_head_to_head', input: { team1_name: uniqueTeams[0], team2_name: uniqueTeams[1] } };
+    }
+  }
+
+  // Team form detection
+  if (/formu|son maç|nasıl oynuyor|performans|istatistik|galibiyet/i.test(m)) {
+    const found = Object.keys(TEAM_ALIASES).find(k => m.includes(k));
+    if (found) {
+      return { name: 'get_team_form', input: { team_name: TEAM_ALIASES[found], league_id: leagueId } };
+    }
+  }
+
+  return null;
+}
+
+// ── API call (raw fetch to /api/chat proxy) ─────────────────
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -436,26 +503,17 @@ interface ChatMessage {
   tool_call_id?: string;
 }
 
-// On web (Vercel), call the serverless proxy to avoid CORS and keep key server-side.
-// On native mobile, call the gateway directly.
-const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
-const AI_ENDPOINT = isWeb
-  ? '/api/chat'
-  : 'https://gateway.vercel.ai/openai/v1/chat/completions';
+// Always go through the /api/chat proxy.
+// Web: relative URL (same-origin, no CORS).
+// Native: absolute URL via EXPO_PUBLIC_API_URL.
+const AI_ENDPOINT = API_URL ? `${API_URL}/api/chat` : '/api/chat';
 
 async function callAI(messages: ChatMessage[]): Promise<unknown> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-
-  // Native only — web uses the serverless proxy which adds auth server-side
-  if (!isWeb) {
-    headers['Authorization'] = `Bearer ${AI_GATEWAY_KEY}`;
-  }
-
   const res = await fetch(AI_ENDPOINT, {
     method: 'POST',
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: AI_MODEL,
       max_tokens: 1024,
       messages,
       tools: TOOLS,
@@ -477,7 +535,10 @@ export interface AIChatResponse {
   widget_payload?: WidgetPayload;
 }
 
-export async function getAIResponse(userMessage: string): Promise<AIChatResponse> {
+export async function getAIResponse(
+  userMessage: string,
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>,
+): Promise<AIChatResponse> {
   const hasGatewayKey = AI_GATEWAY_KEY && AI_GATEWAY_KEY !== 'YOUR_AI_GATEWAY_KEY';
   const hasRapidKey = RAPIDAPI_KEY && RAPIDAPI_KEY !== 'YOUR_RAPIDAPI_KEY';
 
@@ -490,8 +551,17 @@ export async function getAIResponse(userMessage: string): Promise<AIChatResponse
 
   try {
     const leagueId = detectLeague(userMessage);
+
+    // Include recent conversation history for context
+    const MAX_HISTORY = 10;
+    const recentHistory = (history ?? []).slice(-MAX_HISTORY);
+
     const messages: ChatMessage[] = [
       { role: 'system', content: SYSTEM_PROMPT },
+      ...recentHistory.map(h => ({
+        role: h.role as ChatMessage['role'],
+        content: h.content,
+      })),
       { role: 'user', content: userMessage },
     ];
 
@@ -524,11 +594,15 @@ export async function getAIResponse(userMessage: string): Promise<AIChatResponse
         toolInput.league_id = leagueId;
       }
 
-      const { widget, text: toolResultText } = await executeTool(toolName, toolInput);
+      const { widget, text: toolResultText, richText } = await executeTool(toolName, toolInput);
 
-      // Second call: model generates natural language response using tool result
+      // Second call: model generates natural language response using rich tool data
       const followUp: ChatMessage[] = [
         { role: 'system', content: SYSTEM_PROMPT },
+        ...recentHistory.map(h => ({
+          role: h.role as ChatMessage['role'],
+          content: h.content,
+        })),
         { role: 'user', content: userMessage },
         {
           role: 'assistant',
@@ -537,7 +611,7 @@ export async function getAIResponse(userMessage: string): Promise<AIChatResponse
         },
         {
           role: 'tool',
-          content: toolResultText,
+          content: richText,
           tool_call_id: toolCall.id,
         },
       ];
@@ -548,6 +622,38 @@ export async function getAIResponse(userMessage: string): Promise<AIChatResponse
 
       const responseText = finalResponse.choices[0]?.message?.content ?? toolResultText;
       return { content: responseText, widget_payload: widget ?? undefined };
+    }
+
+    // Fallback: if model gave text but message clearly needs a tool
+    const fallbackTool = detectFallbackTool(userMessage);
+    if (fallbackTool) {
+      const { widget, text: fallbackText, richText: fallbackRich } = await executeTool(
+        fallbackTool.name,
+        fallbackTool.input,
+      );
+      if (widget) {
+        const fallbackMessages: ChatMessage[] = [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: userMessage },
+          {
+            role: 'assistant',
+            content: null,
+            tool_calls: [{
+              id: 'fallback_1',
+              type: 'function',
+              function: { name: fallbackTool.name, arguments: JSON.stringify(fallbackTool.input) },
+            }],
+          },
+          { role: 'tool', content: fallbackRich, tool_call_id: 'fallback_1' },
+        ];
+        const fallbackResponse = await callAI(fallbackMessages) as {
+          choices: [{ message: { content: string | null } }];
+        };
+        return {
+          content: fallbackResponse.choices[0]?.message?.content ?? fallbackText,
+          widget_payload: widget ?? undefined,
+        };
+      }
     }
 
     // Direct text response (general question, analysis, no widget needed)

@@ -14,8 +14,9 @@ interface ChatState {
   loadHistory: () => Promise<void>;
 }
 
-// Use local mock responses (edge function not deployed yet)
-const USE_MOCK = true;
+// When true, use client-side AI service (aiChat.ts) via Vercel AI Gateway.
+// When false, use Supabase Edge Function (legacy path, requires OpenRouter key).
+const USE_CLIENT_AI = true;
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
@@ -24,7 +25,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   error: null,
 
   initSession: async () => {
-    if (USE_MOCK) {
+    if (USE_CLIENT_AI) {
       set({ sessionId: 'mock-session' });
       return;
     }
@@ -53,7 +54,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   loadHistory: async () => {
-    if (USE_MOCK) return;
+    if (USE_CLIENT_AI) return;
     const { sessionId } = get();
     if (!sessionId) return;
 
@@ -80,8 +81,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ messages: [...messages, userMsg], loading: true, error: null });
 
     try {
-      if (USE_MOCK) {
-        const response = await getAIResponse(content);
+      if (USE_CLIENT_AI) {
+        const history = get().messages
+          .filter(m => m.role === 'user' || m.role === 'assistant')
+          .filter(m => m.content && !m.content.startsWith('Hata:'))
+          .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+        const response = await getAIResponse(content, history);
         const assistantMsg: Message = {
           id: `msg-${Date.now()}-resp`,
           session_id: sessionId,
@@ -124,12 +129,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
         loading: false,
       }));
     } catch (err: any) {
-      const errorMessage = err.message || 'Bir hata olustu';
+      let errorMessage = 'Bir hata oluştu, lütfen tekrar deneyin.';
+      if (err.message?.includes('API istek limiti')) {
+        errorMessage = 'API istek limiti aşıldı. Birkaç saniye bekleyip tekrar deneyin.';
+      } else if (err.message?.includes('API anahtarları eksik')) {
+        errorMessage = err.message;
+      } else if (err.message?.includes('AI error')) {
+        errorMessage = 'AI servisi geçici olarak yanıt veremiyor. Tekrar deneyin.';
+      } else if (err.message?.includes('Futbol verisi alınamadı')) {
+        errorMessage = 'Futbol verisi şu an alınamıyor. Lütfen tekrar deneyin.';
+      }
       const errorMsg: Message = {
         id: `msg-${Date.now()}-error`,
         session_id: sessionId,
         role: 'assistant',
-        content: `Hata: ${errorMessage}`,
+        content: errorMessage,
         created_at: new Date().toISOString(),
       };
       set((state) => ({

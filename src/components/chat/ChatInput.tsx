@@ -6,12 +6,12 @@ import { useAnimatedPress } from '../../hooks/useAnimatedPress';
 import { SendIcon } from '../icons';
 
 const QUICK_PROMPTS = [
-  'Bugun maclar',
-  'Canli skorlar',
-  'Puan durumu',
-  'Gol kralligi',
-  'GS formu',
-  'Trend tahminler',
+  { icon: '\uD83D\uDCC5', label: 'Bugun maclar' },
+  { icon: '\uD83D\uDD34', label: 'Canli skorlar' },
+  { icon: '\uD83D\uDCCA', label: 'Puan durumu' },
+  { icon: '\uD83D\uDC51', label: 'Gol kralligi' },
+  { icon: '\uD83E\uDD81', label: 'GS formu' },
+  { icon: '\uD83C\uDFDF\uFE0F', label: 'GS vs FB' },
 ];
 
 interface ChatInputProps {
@@ -35,26 +35,27 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
 
   return (
     <View style={styles.wrapper}>
-      {/* Quick prompt chips */}
+      {/* Quick prompt chips with icons */}
       {!focused && !text && (
         <View style={styles.chips}>
           {QUICK_PROMPTS.map((prompt) => (
             <Pressable
-              key={prompt}
+              key={prompt.label}
               style={styles.chip}
-              onPress={() => onSend(prompt)}
+              onPress={() => onSend(prompt.label)}
               disabled={disabled}
             >
-              <Text style={styles.chipText}>{prompt}</Text>
+              <Text style={styles.chipIcon}>{prompt.icon}</Text>
+              <Text style={styles.chipText}>{prompt.label}</Text>
             </Pressable>
           ))}
         </View>
       )}
 
       {/* Input row */}
-      <View style={[styles.inputRow, focused && styles.inputRowFocused]}>
+      <View style={styles.inputRow}>
         <TextInput
-          style={styles.input}
+          style={[styles.input, focused && styles.inputFocused]}
           placeholder="Futbol hakkinda bir seyler sor..."
           placeholderTextColor={COLORS.textSecondary}
           value={text}
@@ -93,20 +94,26 @@ const styles = StyleSheet.create({
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: SPACING.xs,
+    gap: 6,
     paddingHorizontal: SPACING.md,
     paddingBottom: SPACING.sm,
   },
   chip: {
-    backgroundColor: COLORS.card,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.glass,
     borderWidth: 1,
-    borderColor: COLORS.borderBright,
+    borderColor: COLORS.glassBorder,
     borderRadius: BORDER_RADIUS.full,
     paddingHorizontal: SPACING.md,
     paddingVertical: 6,
   },
+  chipIcon: {
+    fontSize: 12,
+  },
   chipText: {
-    color: COLORS.textSecondary,
+    color: COLORS.text,
     fontSize: FONT_SIZES.xs,
     fontWeight: '500',
   },
@@ -116,9 +123,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingBottom: SPACING.md,
     gap: SPACING.sm,
-  },
-  inputRowFocused: {
-    // subtle glow effect handled by borderColor on input
   },
   input: {
     flex: 1,
@@ -131,6 +135,9 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  inputFocused: {
+    borderColor: COLORS.glassAccentBorder,
   },
   sendBtn: {
     width: 44,

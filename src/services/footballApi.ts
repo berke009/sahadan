@@ -7,6 +7,13 @@ const HEADERS = {
   'X-RapidAPI-Host': 'api-football-v1.p.rapidapi.com',
 };
 
+export class FootballApiError extends Error {
+  constructor(message: string, public statusCode?: number) {
+    super(message);
+    this.name = 'FootballApiError';
+  }
+}
+
 async function apiFetch<T>(endpoint: string, params: Record<string, string | number> = {}): Promise<T | null> {
   if (!RAPIDAPI_KEY || RAPIDAPI_KEY === 'YOUR_RAPIDAPI_KEY') {
     console.warn('[footballApi] No RapidAPI key set — returning null');
@@ -16,10 +23,17 @@ async function apiFetch<T>(endpoint: string, params: Record<string, string | num
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
   try {
     const res = await fetch(url.toString(), { headers: HEADERS });
-    if (!res.ok) throw new Error(`API error ${res.status}`);
+    if (!res.ok) {
+      console.error(`[footballApi] ${endpoint} returned ${res.status}`);
+      if (res.status === 429) {
+        throw new FootballApiError('API istek limiti aşıldı. Lütfen biraz bekleyin.', 429);
+      }
+      throw new FootballApiError(`Futbol verisi alınamadı (HTTP ${res.status})`, res.status);
+    }
     const json = await res.json();
     return json.response as T;
   } catch (e) {
+    if (e instanceof FootballApiError) throw e;
     console.error('[footballApi]', e);
     return null;
   }
