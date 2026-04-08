@@ -10,8 +10,10 @@
     "build": "expo export --platform web"
   },
   "dependencies": {
+    "@ai-sdk/gateway": "^3.0.93",
     "@expo/metro-runtime": "~6.1.2",
     "@supabase/supabase-js": "^2.102.1",
+    "ai": "^6.0.153",
     "expo": "~54.0.33",
     "expo-constants": "~18.0.13",
     "expo-haptics": "~15.0.8",
