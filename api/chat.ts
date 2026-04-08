@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateText } from 'ai';
+import { generateText, tool } from 'ai';
 import { createGateway } from '@ai-sdk/gateway';
 import { z } from 'zod';
 
@@ -7,46 +7,46 @@ const gatewayProvider = createGateway({
   apiKey: process.env.AI_GATEWAY_API_KEY,
 });
 
-// Static zod tool definitions — Anthropic & OpenAI compatible
+// Static tool definitions using tool() helper — works with both OpenAI and Anthropic
 const TOOLS = {
-  get_today_fixtures: {
+  get_today_fixtures: tool({
     description: "Bugünkü futbol maçlarını getirir. Kullanım: 'bugün maç var mı', 'akşam maçları', 'fikstür', 'today matches', 'fixtures'",
-    parameters: z.object({
+    inputSchema: z.object({
       league_id: z.number().optional().describe('Lig ID: 203=Süper Lig (varsayılan), 39=Premier League, 140=La Liga, 135=Serie A, 78=Bundesliga, 2=Şampiyonlar Ligi'),
     }),
-  },
-  get_live_scores: {
+  }),
+  get_live_scores: tool({
     description: "Şu an oynanan canlı maçları getirir. Kullanım: 'canlı', 'canlı skor', 'live', 'kaç kaç', 'şu an oynuyor mu'",
-    parameters: z.object({
+    inputSchema: z.object({
       league_id: z.number().optional().describe('Opsiyonel lig filtresi'),
     }),
-  },
-  get_standings: {
+  }),
+  get_standings: tool({
     description: "Lig puan durumu tablosunu getirir. Kullanım: 'puan durumu', 'tablo', 'sıralama', 'standings', 'league table'",
-    parameters: z.object({
+    inputSchema: z.object({
       league_id: z.number().describe('Lig ID: 203=Süper Lig, 39=Premier League, 140=La Liga, 135=Serie A, 78=Bundesliga, 2=Şampiyonlar Ligi'),
     }),
-  },
-  get_top_scorers: {
+  }),
+  get_top_scorers: tool({
     description: "Ligin gol krallığı listesini getirir. Kullanım: 'gol krallığı', 'en çok gol atan', 'golcüler', 'top scorers', 'golden boot'",
-    parameters: z.object({
+    inputSchema: z.object({
       league_id: z.number().describe('Lig ID: 203=Süper Lig, 39=Premier League, 140=La Liga, 135=Serie A, 78=Bundesliga'),
     }),
-  },
-  get_team_form: {
+  }),
+  get_team_form: tool({
     description: "Bir takımın son maç formunu ve istatistiklerini getirir. Kullanım: '[takım] formu', 'nasıl oynuyor', 'son maçları', 'team form', 'recent results'",
-    parameters: z.object({
+    inputSchema: z.object({
       team_name: z.string().describe('Takım adı. Örnek: Galatasaray, Fenerbahçe, Arsenal, Barcelona'),
       league_id: z.number().optional().describe('Opsiyonel lig ID'),
     }),
-  },
-  get_head_to_head: {
+  }),
+  get_head_to_head: tool({
     description: "İki takım arasındaki geçmiş maç istatistiklerini getirir. Kullanım: '[takım1] vs [takım2]', 'karşılaştır', 'h2h', 'derbisi', 'head to head'",
-    parameters: z.object({
+    inputSchema: z.object({
       team1_name: z.string().describe('Birinci takım adı'),
       team2_name: z.string().describe('İkinci takım adı'),
     }),
-  },
+  }),
 };
 
 const SYSTEM_PROMPT = `Sen SAHADAN — Türkiye'nin en iyi futbol analiz uygulamasının AI asistanısın.
@@ -115,7 +115,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     type: 'function',
                     function: {
                       name: toolCall.toolName,
-                      arguments: JSON.stringify(toolCall.args ?? {}),
+                      arguments: JSON.stringify((toolCall as any).input ?? (toolCall as any).args ?? {}),
                     },
                   },
                 ]
