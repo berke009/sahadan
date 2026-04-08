@@ -436,15 +436,24 @@ interface ChatMessage {
   tool_call_id?: string;
 }
 
+// On web (Vercel), call the serverless proxy to avoid CORS and keep key server-side.
+// On native mobile, call the gateway directly.
+const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
+const AI_ENDPOINT = isWeb
+  ? '/api/chat'
+  : 'https://gateway.vercel.ai/openai/v1/chat/completions';
+
 async function callAI(messages: ChatMessage[]): Promise<unknown> {
-  // Vercel AI Gateway — provider is in the URL path, model has no prefix
-  // Dashboard: vercel.com/dashboard → AI → Gateway → configure your provider there
-  const res = await fetch('https://gateway.vercel.ai/openai/v1/chat/completions', {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+  // Native only — web uses the serverless proxy which adds auth server-side
+  if (!isWeb) {
+    headers['Authorization'] = `Bearer ${AI_GATEWAY_KEY}`;
+  }
+
+  const res = await fetch(AI_ENDPOINT, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${AI_GATEWAY_KEY}`,
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       model: 'gpt-4o-mini',
       max_tokens: 1024,
@@ -456,7 +465,7 @@ async function callAI(messages: ChatMessage[]): Promise<unknown> {
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
-    throw new Error(`Vercel AI Gateway error ${res.status}: ${errText}`);
+    throw new Error(`AI error ${res.status}: ${errText}`);
   }
   return res.json();
 }
