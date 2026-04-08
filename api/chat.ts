@@ -23,13 +23,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const fn = t.function;
         // Ensure parameters always has type:object
         const parameters = {
-          type: 'object',
+          type: 'object' as const,
           properties: fn.parameters?.properties ?? {},
           required: fn.parameters?.required ?? [],
         };
         sdkTools[fn.name] = {
           description: fn.description,
-          parameters: jsonSchema(parameters),
+          parameters: jsonSchema(parameters as any),
         };
       }
     }
