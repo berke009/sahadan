@@ -1,10 +1,81 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateText, jsonSchema } from 'ai';
+import { generateText } from 'ai';
 import { createGateway } from '@ai-sdk/gateway';
+import { z } from 'zod';
 
 const gatewayProvider = createGateway({
   apiKey: process.env.AI_GATEWAY_API_KEY,
 });
+
+// Static zod tool definitions — Anthropic & OpenAI compatible
+const TOOLS = {
+  get_today_fixtures: {
+    description: "Bugünkü futbol maçlarını getirir. Kullanım: 'bugün maç var mı', 'akşam maçları', 'fikstür', 'today matches', 'fixtures'",
+    parameters: z.object({
+      league_id: z.number().optional().describe('Lig ID: 203=Süper Lig (varsayılan), 39=Premier League, 140=La Liga, 135=Serie A, 78=Bundesliga, 2=Şampiyonlar Ligi'),
+    }),
+  },
+  get_live_scores: {
+    description: "Şu an oynanan canlı maçları getirir. Kullanım: 'canlı', 'canlı skor', 'live', 'kaç kaç', 'şu an oynuyor mu'",
+    parameters: z.object({
+      league_id: z.number().optional().describe('Opsiyonel lig filtresi'),
+    }),
+  },
+  get_standings: {
+    description: "Lig puan durumu tablosunu getirir. Kullanım: 'puan durumu', 'tablo', 'sıralama', 'standings', 'league table'",
+    parameters: z.object({
+      league_id: z.number().describe('Lig ID: 203=Süper Lig, 39=Premier League, 140=La Liga, 135=Serie A, 78=Bundesliga, 2=Şampiyonlar Ligi'),
+    }),
+  },
+  get_top_scorers: {
+    description: "Ligin gol krallığı listesini getirir. Kullanım: 'gol krallığı', 'en çok gol atan', 'golcüler', 'top scorers', 'golden boot'",
+    parameters: z.object({
+      league_id: z.number().describe('Lig ID: 203=Süper Lig, 39=Premier League, 140=La Liga, 135=Serie A, 78=Bundesliga'),
+    }),
+  },
+  get_team_form: {
+    description: "Bir takımın son maç formunu ve istatistiklerini getirir. Kullanım: '[takım] formu', 'nasıl oynuyor', 'son maçları', 'team form', 'recent results'",
+    parameters: z.object({
+      team_name: z.string().describe('Takım adı. Örnek: Galatasaray, Fenerbahçe, Arsenal, Barcelona'),
+      league_id: z.number().optional().describe('Opsiyonel lig ID'),
+    }),
+  },
+  get_head_to_head: {
+    description: "İki takım arasındaki geçmiş maç istatistiklerini getirir. Kullanım: '[takım1] vs [takım2]', 'karşılaştır', 'h2h', 'derbisi', 'head to head'",
+    parameters: z.object({
+      team1_name: z.string().describe('Birinci takım adı'),
+      team2_name: z.string().describe('İkinci takım adı'),
+    }),
+  },
+};
+
+const SYSTEM_PROMPT = `Sen SAHADAN — Türkiye'nin en iyi futbol analiz uygulamasının AI asistanısın.
+
+DILLER: Kullanıcı Türkçe yazarsa Türkçe, İngilizce yazarsa İngilizce yanıt ver.
+
+WIDGET SİSTEMİ — KRİTİK KURALLAR:
+Kullanıcı futbolla ilgili herhangi bir şey sorduğunda MUTLAKA ilgili tool'u çağır.
+
+Tool → Widget Eşleştirmesi:
+- Maç/fikstür sorusu → get_today_fixtures
+- Canlı skor → get_live_scores
+- Puan durumu/tablo → get_standings
+- Gol krallığı → get_top_scorers
+- Takım formu/istatistik → get_team_form
+- İki takım karşılaştırma/h2h → get_head_to_head
+
+LİG KİMLİKLERİ:
+- 203 = Türkiye Süper Lig (varsayılan)
+- 39  = Premier League
+- 140 = La Liga
+- 135 = Serie A
+- 78  = Bundesliga
+- 2   = UEFA Şampiyonlar Ligi
+
+KURALLAR:
+- Widget sonrası maksimum 2 kısa cümle yaz
+- Lig belirtilmezse Süper Lig (203) kullan
+- Bahis tavsiyesi verme`;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -15,37 +86,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { messages, tools: rawTools } = req.body;
+    const { messages } = req.body;
 
-    const systemMsg = messages.find((m: any) => m.role === 'system')?.content ?? '';
-    const chatMessages = messages.filter((m: any) => m.role !== 'system');
-
-    // Build tools using jsonSchema — preserves exact JSON Schema structure
-    const sdkTools: Record<string, any> = {};
-    if (rawTools) {
-      for (const t of rawTools) {
-        const fn = t.function;
-        sdkTools[fn.name] = {
-          description: fn.description,
-          parameters: jsonSchema({
-            type: 'object' as const,
-            properties: fn.parameters?.properties ?? {},
-            ...(fn.parameters?.required?.length ? { required: fn.parameters.required } : {}),
-          }),
-        };
-      }
-    }
+    // Filter out system messages from frontend — we use our own
+    const chatMessages = (messages as any[]).filter((m) => m.role !== 'system');
 
     const result = await generateText({
       model: gatewayProvider('openai/gpt-4o-mini'),
-      system: systemMsg,
+      system: SYSTEM_PROMPT,
       messages: chatMessages,
-      tools: Object.keys(sdkTools).length ? sdkTools : undefined,
+      tools: TOOLS,
       toolChoice: 'auto',
       maxTokens: 1024,
-    } as any);
+    });
 
     const toolCall = result.toolCalls?.[0];
+
     return res.status(200).json({
       choices: [
         {
@@ -59,7 +115,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     type: 'function',
                     function: {
                       name: toolCall.toolName,
-                      arguments: JSON.stringify((toolCall as any).args ?? {}),
+                      arguments: JSON.stringify(toolCall.args ?? {}),
                     },
                   },
                 ]
