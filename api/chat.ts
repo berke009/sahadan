@@ -1,8 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { generateText, jsonSchema } from 'ai';
+import { createGateway } from '@ai-sdk/gateway';
 
-const AI_GATEWAY_KEY = process.env.AI_GATEWAY_API_KEY || '';
-// Vercel AI Gateway base URL
-const GATEWAY_URL = 'https://gateway.ai.vercel.app/openai/v1/chat/completions';
+const gatewayProvider = createGateway({
+  apiKey: process.env.AI_GATEWAY_API_KEY,
+});
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -13,34 +15,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { messages, tools } = req.body;
+    const { messages, tools: rawTools } = req.body;
 
-    // Forward raw OpenAI-format request — no schema conversion
-    const response = await fetch(GATEWAY_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${AI_GATEWAY_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        max_tokens: 1024,
-        messages,
-        tools,
-        tool_choice: 'auto',
-      }),
-    });
+    const systemMsg = messages.find((m: any) => m.role === 'system')?.content ?? '';
+    const chatMessages = messages.filter((m: any) => m.role !== 'system');
 
-    const text = await response.text();
-
-    if (!response.ok) {
-      console.error('[api/chat] Gateway error:', response.status, text);
-      return res.status(response.status).json({ error: `AI Gateway error ${response.status}: ${text}` });
+    // Build tools using jsonSchema — preserves exact JSON Schema structure
+    const sdkTools: Record<string, any> = {};
+    if (rawTools) {
+      for (const t of rawTools) {
+        const fn = t.function;
+        sdkTools[fn.name] = {
+          description: fn.description,
+          parameters: jsonSchema({
+            type: 'object' as const,
+            properties: fn.parameters?.properties ?? {},
+            ...(fn.parameters?.required?.length ? { required: fn.parameters.required } : {}),
+          }),
+        };
+      }
     }
 
-    return res.status(200).send(text);
+    const result = await generateText({
+      model: gatewayProvider('openai/gpt-4o-mini'),
+      system: systemMsg,
+      messages: chatMessages,
+      tools: Object.keys(sdkTools).length ? sdkTools : undefined,
+      toolChoice: 'auto',
+      maxTokens: 1024,
+    } as any);
+
+    const toolCall = result.toolCalls?.[0];
+    return res.status(200).json({
+      choices: [
+        {
+          message: {
+            role: 'assistant',
+            content: result.text || null,
+            tool_calls: toolCall
+              ? [
+                  {
+                    id: toolCall.toolCallId,
+                    type: 'function',
+                    function: {
+                      name: toolCall.toolName,
+                      arguments: JSON.stringify((toolCall as any).args ?? {}),
+                    },
+                  },
+                ]
+              : undefined,
+          },
+          finish_reason: toolCall ? 'tool_calls' : 'stop',
+        },
+      ],
+    });
   } catch (err: any) {
-    console.error('[api/chat] Error:', err);
+    console.error('[api/chat] Error:', err?.message ?? err);
     return res.status(500).json({ error: err.message || 'Internal server error' });
   }
 }
