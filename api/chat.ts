@@ -97,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       messages: chatMessages,
       tools: TOOLS,
       toolChoice: 'auto',
-      maxTokens: 1024,
+      maxOutputTokens: 1024,
     });
 
     const toolCall = result.toolCalls?.[0];
